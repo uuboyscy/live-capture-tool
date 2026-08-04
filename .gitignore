@@ -1,0 +1,12 @@
+.build/
+.venv/
+.uv-cache/
+.uv-python/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+transcripts/
+logs/
+*.log
+*.wav
