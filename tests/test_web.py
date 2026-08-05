@@ -1,4 +1,5 @@
 import http.client
+import re
 import socket
 import struct
 import tempfile
@@ -71,6 +72,13 @@ class ServerTests(unittest.TestCase):
         self.assertIn('id="clearTranscript"', body)
         self.assertIn('id="resetSessionName"', body)
         self.assertIn('id="language"', body)
+        self.assertIn('class="topbar"', body)
+        self.assertIn('id="modalBackdrop"', body)
+        self.assertIn('id="transcriptCount"', body)
+        self.assertIn('id="processingNotice"', body)
+        self.assertIn("正在完成剩餘辨識", body)
+        self.assertIn("prefers-reduced-motion", body)
+        self.assertIn("--radius-control: 12px", body)
         self.assertIn('<option value="zh">中文</option>', body)
         self.assertIn('<option value="en">英文</option>', body)
         self.assertIn('<option value="auto">Auto</option>', body)
@@ -81,6 +89,8 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("__DEFAULT_LANGUAGE__", body)
         self.assertIn("liveTranscriptControlsCompact", body)
         self.assertNotIn("__MODEL_CONTROL_ENABLED__", body)
+        element_ids = re.findall(r'\bid="([^"]+)"', body)
+        self.assertEqual(len(element_ids), len(set(element_ids)))
         connection.close()
 
         connection = http.client.HTTPConnection("127.0.0.1", server._server.server_port)

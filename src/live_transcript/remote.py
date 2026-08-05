@@ -172,7 +172,12 @@ class RemoteAudioReceiver:
             assert session_id is not None
             record = self._sessions[session_id]
             record.state = "finishing"
+            payload = record.payload()
 
+        self._publish_session(payload)
+        self._set_status("processing", "正在辨識剩餘音訊並保存逐字稿")
+
+        succeeded = False
         try:
             assert worker is not None
             for segmenter in segmenters.values():
@@ -187,19 +192,22 @@ class RemoteAudioReceiver:
                 payload = record.payload()
             self._publish_session(payload)
             self._set_status("error", "逐字稿保存失敗")
-            return
+        else:
+            with self._lock:
+                assert record.writer is not None
+                record.markdown_path = record.writer.markdown_path
+                record.jsonl_path = record.writer.jsonl_path
+                record.writer = None
+                record.state = "saved"
+                payload = record.payload()
+            self._publish_session(payload)
+            self._set_status("processing", "逐字稿已保存；正在釋放模型資源")
+            succeeded = True
         finally:
             self._engine.end_session_and_unload()
 
-        with self._lock:
-            assert record.writer is not None
-            record.markdown_path = record.writer.markdown_path
-            record.jsonl_path = record.writer.jsonl_path
-            record.writer = None
-            record.state = "saved"
-            payload = record.payload()
-        self._publish_session(payload)
-        self._set_status("waiting", "逐字稿已保存；可開始下一次錄音")
+        if succeeded:
+            self._set_status("waiting", "逐字稿已保存；可開始下一次錄音")
 
     def close_active(self) -> None:
         with self._lock:

@@ -50,11 +50,16 @@ class RemoteAudioReceiverTests(unittest.TestCase):
             sessions = []
             statuses = []
             engine = FakeEngine()
+
+            def publish_session(session):
+                sessions.append(session)
+                session["unload_count_when_published"] = engine.unload_count
+
             receiver = RemoteAudioReceiver(
                 engine,
                 Path(directory),
                 transcripts.append,
-                sessions.append,
+                publish_session,
                 lambda state, message: statuses.append((state, message)),
                 threshold=100,
                 silence_seconds=0.1,
@@ -80,7 +85,10 @@ class RemoteAudioReceiverTests(unittest.TestCase):
             self.assertEqual(len(transcripts), 1)
             self.assertEqual(statuses[0][0], "recording")
             self.assertEqual(statuses[-1][0], "waiting")
+            self.assertEqual([item["state"] for item in sessions[-2:]], ["finishing", "saved"])
             self.assertEqual(sessions[-1]["state"], "saved")
+            self.assertEqual(sessions[-1]["unload_count_when_published"], 0)
+            self.assertIn("processing", [state for state, _message in statuses])
             self.assertEqual(engine.unload_count, 1)
             self.assertFalse(engine.loaded)
 

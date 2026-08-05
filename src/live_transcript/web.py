@@ -65,408 +65,869 @@ PAGE = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light">
   <title>Live Transcript</title>
   <style>
     :root {
+      --color-canvas: #ece6dc;
+      --color-surface: #f1ece3;
+      --color-surface-raised: #f7f2ea;
+      --color-surface-inset: #e2dbd0;
+      --color-ink: #292724;
+      --color-muted: #57534d;
+      --color-subtle: #635d56;
+      --color-line: #c8beb0;
+      --color-line-strong: #aa9d8d;
+      --color-primary: #97462f;
+      --color-primary-hover: #7f3825;
+      --color-primary-soft: #ead1c6;
+      --color-success: #3f6a55;
+      --color-success-soft: #d5e2d9;
+      --color-warning: #8b5b1b;
+      --color-danger: #873b31;
+      --color-danger-soft: #ead0cc;
+      --color-focus: #235e78;
+      --space-1: 8px;
+      --space-2: 16px;
+      --space-3: 24px;
+      --space-4: 32px;
+      --space-5: 48px;
+      --radius-control: 12px;
+      --radius-card: 16px;
+      --shadow-raised:
+        8px 8px 20px rgba(86, 69, 51, .16),
+        -8px -8px 20px rgba(255, 255, 255, .76),
+        inset 1px 1px 0 rgba(255, 255, 255, .72);
+      --shadow-control:
+        4px 4px 10px rgba(86, 69, 51, .15),
+        -4px -4px 10px rgba(255, 255, 255, .72),
+        inset 1px 1px 0 rgba(255, 255, 255, .68);
+      --shadow-pressed:
+        inset 3px 3px 7px rgba(86, 69, 51, .18),
+        inset -3px -3px 7px rgba(255, 255, 255, .64);
+      --motion-fast: 160ms;
+      --motion-base: 240ms;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
         "Segoe UI", sans-serif;
-      color: #f4f1e8;
-      background: #11120f;
+      color: var(--color-ink);
+      background: var(--color-canvas);
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
+      min-width: 320px;
       min-height: 100vh;
       margin: 0;
-      background:
-        radial-gradient(circle at 18% 0%, rgba(103, 141, 96, .18), transparent 35rem),
-        #11120f;
+      color: var(--color-ink);
+      background: var(--color-canvas);
+      font-size: 16px;
+      line-height: 1.5;
     }
-    main {
-      width: min(900px, calc(100% - 32px));
+    button, input, select { font: inherit; }
+    button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+    [hidden] { display: none !important; }
+    .skip-link {
+      position: fixed;
+      top: var(--space-2);
+      left: var(--space-2);
+      z-index: 100;
+      transform: translateY(-160%);
+      border-radius: var(--radius-control);
+      padding: 12px 16px;
+      color: #fff;
+      background: var(--color-primary);
+      transition: transform var(--motion-fast) ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .app-shell {
+      width: min(1200px, calc(100% - 48px));
       margin: 0 auto;
-      padding: 48px 0 96px;
     }
-    header {
-      padding: 16px 0 24px;
-    }
-    .eyebrow {
-      margin: 0 0 8px;
-      color: #aab5a5;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-    }
-    .heading {
-      display: flex;
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
-      gap: 20px;
+      min-height: 72px;
+      border-bottom: 1px solid rgba(170, 157, 141, .58);
+      background: rgba(236, 230, 220, .94);
+      backdrop-filter: blur(16px);
     }
-    .status-stack {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 8px;
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      width: fit-content;
+      color: var(--color-ink);
+      font-size: 15px;
+      font-weight: 780;
+      letter-spacing: -.01em;
+      text-decoration: none;
     }
-    h1 {
-      margin: 0;
-      font-family: ui-serif, Georgia, serif;
-      font-size: clamp(32px, 6vw, 58px);
-      font-weight: 500;
-      letter-spacing: -.04em;
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      color: #fff;
+      background: var(--color-primary);
+      box-shadow: var(--shadow-control);
+      font-size: 12px;
+      letter-spacing: .06em;
     }
-    .status {
+    .brand:hover .brand-mark { background: var(--color-primary-hover); transform: translateY(-1px); }
+    .brand:active .brand-mark { transform: translateY(0); box-shadow: var(--shadow-pressed); }
+    .nav-links { display: flex; align-items: center; gap: 8px; }
+    .nav-links a {
+      min-height: 44px;
+      padding: 11px 14px;
+      border-radius: var(--radius-control);
+      color: var(--color-muted);
+      font-size: 14px;
+      font-weight: 650;
+      text-decoration: none;
+      transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+    }
+    .nav-links a:hover { color: var(--color-ink); background: var(--color-surface); }
+    .nav-links a:active { box-shadow: var(--shadow-pressed); }
+    .privacy-badge {
+      justify-self: end;
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      flex: none;
-      border: 1px solid #34372f;
+      min-height: 36px;
+      border: 1px solid var(--color-line);
       border-radius: 999px;
-      padding: 8px 12px;
-      color: #c8cec3;
-      background: rgba(26, 28, 24, .86);
-      font-size: 13px;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #d1a34f;
-      box-shadow: 0 0 0 4px rgba(209, 163, 79, .12);
-    }
-    .status.live .dot {
-      background: #8dcc81;
-      box-shadow: 0 0 0 4px rgba(141, 204, 129, .12);
-      animation: pulse 2s infinite;
-    }
-    .status.model-ready .dot {
-      background: #79b9e7;
-      box-shadow: 0 0 0 4px rgba(121, 185, 231, .12);
-    }
-    .status.busy .dot { animation: pulse 1.2s infinite; }
-    .status.ended .dot { background: #8b8e86; box-shadow: none; }
-    @keyframes pulse { 50% { opacity: .45; } }
-    .controls {
-      position: sticky;
-      top: 12px;
-      z-index: 10;
-      display: grid;
-      gap: 18px;
-      margin-top: 18px;
-      border: 1px solid #34372f;
-      border-radius: 20px;
-      padding: 20px;
-      max-height: calc(100vh - 24px);
-      overflow: auto;
-      background: rgba(26, 28, 24, .96);
-      box-shadow: 0 18px 54px rgba(0, 0, 0, .28);
-      backdrop-filter: blur(18px);
-      transition:
-        width .2s ease,
-        padding .2s ease,
-        border-radius .2s ease,
-        box-shadow .2s ease;
-    }
-    .control-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .control-title {
-      margin: 0;
-      color: #aab5a5;
+      padding: 7px 12px;
+      color: var(--color-success);
+      background: var(--color-surface);
       font-size: 12px;
-      font-weight: 750;
+      font-weight: 720;
+      box-shadow: var(--shadow-control);
+    }
+    .privacy-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 0 4px rgba(63, 106, 85, .12);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+      gap: 64px;
+      align-items: center;
+      padding: 72px 0 64px;
+    }
+    .eyebrow, .section-label {
+      margin: 0 0 8px;
+      color: var(--color-primary);
+      font-size: 13px;
+      font-weight: 800;
       letter-spacing: .12em;
       text-transform: uppercase;
     }
-    .compact-toggle {
-      border-color: #3e423a;
-      padding: 7px 12px;
-      color: #c8cec3;
-      background: #22251f;
-      font-size: 12px;
-      font-weight: 650;
+    h1, h2, h3, p { overflow-wrap: anywhere; }
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(44px, 5.4vw, 72px);
+      line-height: 1.04;
+      font-weight: 720;
+      letter-spacing: -.055em;
     }
-    .controls.compact {
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      padding: 10px 12px;
-      border-radius: 999px;
-      overflow: visible;
+    h1 span { color: var(--color-primary); }
+    .lede {
+      max-width: 660px;
+      margin: 24px 0 0;
+      color: var(--color-muted);
+      font-size: 18px;
+      line-height: 1.7;
     }
-    .controls.compact .control-title,
-    .controls.compact .sources,
-    .controls.compact .name-row,
-    .controls.compact .hint,
-    .controls.compact .notice,
-    .controls.compact .download {
-      display: none;
-    }
-    .controls.compact .control-bar {
-      position: absolute;
-      top: 50%;
-      right: 10px;
-      transform: translateY(-50%);
-      z-index: 1;
-    }
-    .controls.compact .actions {
-      padding-right: 58px;
-    }
-    .controls.compact button:not(.compact-toggle) {
-      padding: 8px 14px;
-    }
-    .sources {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px 24px;
-    }
-    label {
-      display: inline-flex;
-      align-items: center;
-      gap: 9px;
-      color: #d9ddd4;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    input[type="checkbox"] {
-      width: 17px;
-      height: 17px;
-      accent-color: #8dcc81;
-    }
-    .language-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .language-row label { color: #aab0a6; font-size: 13px; }
-    select {
-      border: 1px solid #454940;
-      border-radius: 10px;
-      padding: 9px 32px 9px 11px;
-      color: #f4f1e8;
-      background: #161814;
-      font: inherit;
-      font-size: 14px;
-      outline: none;
-    }
-    select:focus {
-      border-color: #8dcc81;
-      box-shadow: 0 0 0 3px rgba(141, 204, 129, .1);
-    }
-    select:disabled { opacity: .55; }
-    .language-hint { color: #898f85; font-size: 12px; }
-    .name-row {
+    .hero-meta {
       display: grid;
-      grid-template-columns: auto minmax(180px, 1fr) auto auto;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      max-width: 680px;
+      margin-top: 32px;
+    }
+    .meta-chip {
+      min-height: 72px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 14px 16px;
+      background: var(--color-surface);
+      box-shadow: var(--shadow-control);
+    }
+    .meta-chip strong { display: block; font-size: 14px; }
+    .meta-chip span { display: block; margin-top: 3px; color: var(--color-subtle); font-size: 12px; }
+    .soft-card {
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-card);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-raised);
+    }
+    .status-console { padding: 24px; }
+    .status-console h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.25;
+      letter-spacing: -.025em;
+    }
+    .status-stack { display: grid; gap: 12px; margin-top: 24px; }
+    .status {
+      position: relative;
+      display: grid;
+      grid-template-columns: 10px 1fr auto;
       align-items: center;
       gap: 12px;
+      min-height: 56px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 12px 14px;
+      color: var(--color-muted);
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+      font-size: 13px;
+      font-weight: 620;
     }
-    .name-row label { color: #aab0a6; font-size: 13px; }
-    input[type="text"] {
-      width: 100%;
-      border: 1px solid #454940;
-      border-radius: 10px;
-      padding: 9px 11px;
-      color: #f4f1e8;
-      background: #161814;
-      font: inherit;
-      font-size: 14px;
-      outline: none;
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--color-warning);
+      box-shadow: 0 0 0 4px rgba(139, 91, 27, .12);
     }
-    input[type="text"]:focus {
-      border-color: #8dcc81;
-      box-shadow: 0 0 0 3px rgba(141, 204, 129, .1);
+    .status.live .dot, .status.model-ready .dot {
+      background: var(--color-success);
+      box-shadow: 0 0 0 4px rgba(63, 106, 85, .14);
     }
-    .name-state { min-width: 52px; color: #898f85; font-size: 12px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    button {
-      border: 1px solid #4b5047;
-      border-radius: 999px;
-      padding: 10px 18px;
-      color: #11120f;
-      background: #b7d7b0;
-      font: inherit;
-      font-size: 14px;
-      font-weight: 750;
-      cursor: pointer;
+    .status.live .dot { animation: pulse 1.8s ease-in-out infinite; }
+    .status.ended .dot { background: var(--color-subtle); box-shadow: none; }
+    .status-loader {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--color-line-strong);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
     }
-    button.secondary { color: #d9ddd4; background: #252822; }
-    button.danger {
-      border-color: #69453f;
-      color: #efc2b9;
-      background: #30201d;
-    }
-    button:disabled { cursor: not-allowed; opacity: .42; }
-    .download {
-      display: inline-flex;
+    .status.busy .status-loader { display: block; }
+    .processing-notice {
+      display: grid;
+      grid-template-columns: 28px 1fr;
       align-items: center;
-      justify-content: center;
-      border: 1px solid #4b5047;
-      border-radius: 999px;
-      padding: 10px 16px;
-      color: #d9ddd4;
-      background: #252822;
-      font-size: 14px;
-      text-decoration: none;
+      gap: 14px;
+      margin-top: 20px;
+      border: 1px solid #d6b37b;
+      border-radius: var(--radius-control);
+      padding: 14px 16px;
+      color: #64420f;
+      background: #f3e3c7;
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .55), 0 8px 18px rgba(83, 57, 32, .08);
+    }
+    .processing-notice[hidden] { display: none; }
+    .processing-notice strong, .processing-notice span { display: block; }
+    .processing-notice strong { font-size: 14px; }
+    .processing-notice span { margin-top: 3px; font-size: 12px; line-height: 1.55; }
+    .processing-spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(100, 66, 15, .2);
+      border-top-color: #8b5b1b;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .console-note {
+      display: flex;
+      gap: 10px;
+      margin: 16px 0 0;
+      color: var(--color-subtle);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .console-note::before { content: "●"; color: var(--color-success); font-size: 9px; padding-top: 3px; }
+    main { padding-bottom: 96px; }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+      gap: 32px;
+      align-items: start;
+      scroll-margin-top: 96px;
+    }
+    .controls[hidden] + .transcript-panel { grid-column: 1 / -1; }
+    .controls {
+      position: sticky;
+      top: 96px;
+      max-height: calc(100vh - 120px);
+      overflow: auto;
+      padding: 24px;
+      transition: padding var(--motion-base) ease, box-shadow var(--motion-base) ease;
+    }
+    .control-bar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .control-bar h2, .panel-header h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: -.03em;
+    }
+    .control-content { display: grid; gap: 24px; margin-top: 24px; }
+    .controls.compact { padding: 16px; }
+    .controls.compact .control-content { display: none; }
+    .controls.compact .control-bar { align-items: center; }
+    .compact-toggle {
+      min-width: 64px;
+      min-height: 44px;
+      padding: 10px 12px;
+      color: var(--color-muted);
+      background: var(--color-surface);
+      font-size: 12px;
     }
     .notice {
       margin: 0;
-      border-left: 3px solid #d1a34f;
-      padding: 2px 0 2px 12px;
-      color: #d8c49f;
+      border: 1px solid #d6b37b;
+      border-radius: var(--radius-control);
+      padding: 12px 14px;
+      color: #64420f;
+      background: #f3e3c7;
       font-size: 13px;
       line-height: 1.55;
     }
-    .hint { margin: 0; color: #898f85; font-size: 12px; line-height: 1.55; }
-    .transcript {
-      display: grid;
-      gap: 12px;
-      margin-top: 20px;
+    fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
+    legend, .field-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--color-muted);
+      font-size: 13px;
+      font-weight: 740;
     }
+    .sources { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .source-option {
+      position: relative;
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      align-items: center;
+      gap: 12px;
+      min-height: 76px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 12px;
+      color: var(--color-ink);
+      background: var(--color-surface-raised);
+      box-shadow: var(--shadow-control);
+      cursor: pointer;
+      transition: transform var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
+    }
+    .source-option:hover { border-color: var(--color-line-strong); transform: translateY(-1px); }
+    .source-option:active { transform: translateY(0); box-shadow: var(--shadow-pressed); }
+    .source-option:focus-within { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+    .source-option:has(input:disabled) { cursor: not-allowed; opacity: .52; transform: none; }
+    .source-copy strong { display: block; font-size: 14px; }
+    .source-copy small { display: block; margin-top: 2px; color: var(--color-subtle); font-size: 11px; }
+    input[type="checkbox"] {
+      appearance: none;
+      display: grid;
+      place-content: center;
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      border: 1px solid var(--color-line-strong);
+      border-radius: 7px;
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+      cursor: pointer;
+    }
+    input[type="checkbox"]::before {
+      content: "";
+      width: 10px;
+      height: 6px;
+      border: solid #fff;
+      border-width: 0 0 2px 2px;
+      opacity: 0;
+      transform: translateY(-1px) rotate(-45deg) scale(.7);
+      transition: opacity var(--motion-fast), transform var(--motion-fast);
+    }
+    input[type="checkbox"]:checked { border-color: var(--color-primary); background: var(--color-primary); box-shadow: inset 2px 2px 4px rgba(74, 27, 14, .25); }
+    input[type="checkbox"]:checked::before { opacity: 1; transform: translateY(-1px) rotate(-45deg) scale(1); }
+    .form-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .field { min-width: 0; }
+    .field-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .field-row .field-label { margin: 0; }
+    .language-hint, .name-state { color: var(--color-subtle); font-size: 11px; }
+    input[type="text"], select {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 11px 13px;
+      color: var(--color-ink);
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+      outline: none;
+      transition: border-color var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+    }
+    select { cursor: pointer; }
+    input[type="text"]::placeholder { color: var(--color-subtle); }
+    input[type="text"]:hover, select:hover { border-color: var(--color-line-strong); }
+    input:disabled, select:disabled { cursor: not-allowed; opacity: .52; }
+    .name-tools { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    button, .download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 1px solid #71311f;
+      border-radius: var(--radius-control);
+      padding: 10px 16px;
+      color: #fff;
+      background: var(--color-primary);
+      box-shadow: var(--shadow-control);
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.2;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+    }
+    button:hover, .download:hover { background: var(--color-primary-hover); transform: translateY(-1px); }
+    button:active, .download:active { transform: translateY(0); box-shadow: var(--shadow-pressed); }
+    button.secondary, .download {
+      border-color: var(--color-line);
+      color: var(--color-ink);
+      background: var(--color-surface-raised);
+    }
+    button.secondary:hover, .download:hover { background: #fffaf3; }
+    button.danger { border-color: #c7978f; color: var(--color-danger); background: var(--color-danger-soft); }
+    button.danger:hover { background: #e2bbb5; }
+    button:disabled, .download[aria-disabled="true"] {
+      cursor: not-allowed;
+      opacity: .42;
+      transform: none;
+      box-shadow: none;
+    }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--color-focus);
+      outline-offset: 3px;
+    }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .actions #start { grid-column: 1 / -1; min-height: 52px; font-size: 15px; }
+    .download-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .helper {
+      border-top: 1px solid var(--color-line);
+      padding-top: 16px;
+      color: var(--color-muted);
+      font-size: 12px;
+    }
+    .helper summary {
+      min-height: 44px;
+      padding: 12px 0;
+      color: var(--color-muted);
+      font-weight: 720;
+      cursor: pointer;
+    }
+    .helper summary:hover { color: var(--color-ink); }
+    .helper summary:active { color: var(--color-primary); }
+    .helper p { margin: 8px 0 0; line-height: 1.7; }
+    .transcript-panel {
+      min-height: 680px;
+      padding: 24px;
+      scroll-margin-top: 96px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      border-bottom: 1px solid var(--color-line);
+      padding-bottom: 20px;
+    }
+    .feed-count {
+      flex: none;
+      border: 1px solid var(--color-line);
+      border-radius: 999px;
+      padding: 7px 11px;
+      color: var(--color-muted);
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+      font-size: 11px;
+      font-weight: 720;
+    }
+    .transcript { display: grid; gap: 12px; margin-top: 20px; }
     .empty {
-      margin-top: 48px;
-      border: 1px dashed #34372f;
-      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      min-height: 430px;
+      margin-top: 20px;
+      border: 1px dashed var(--color-line-strong);
+      border-radius: var(--radius-card);
       padding: 48px 24px;
-      color: #878c83;
+      color: var(--color-muted);
+      background: rgba(226, 219, 208, .42);
       text-align: center;
     }
-    article {
+    .empty-content { max-width: 360px; }
+    .empty-icon {
       display: grid;
-      grid-template-columns: 104px 1fr;
+      grid-template-columns: repeat(4, 4px);
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 16px;
+      border: 1px solid var(--color-line);
+      border-radius: 50%;
+      background: var(--color-surface);
+      box-shadow: var(--shadow-control);
+    }
+    .empty-icon i { width: 4px; border-radius: 4px; background: var(--color-primary); }
+    .empty-icon i:nth-child(1), .empty-icon i:nth-child(4) { height: 10px; }
+    .empty-icon i:nth-child(2) { height: 24px; }
+    .empty-icon i:nth-child(3) { height: 17px; }
+    .empty strong { display: block; color: var(--color-ink); font-size: 16px; }
+    .empty p { margin: 6px 0 0; color: var(--color-subtle); font-size: 13px; }
+    .transcript article {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 20px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 18px;
+      background: var(--color-surface-raised);
+      box-shadow: var(--shadow-control);
+      animation: enter var(--motion-base) ease-out both;
+    }
+    .transcript .meta { color: var(--color-subtle); font-size: 11px; line-height: 1.65; }
+    .transcript .speaker { color: var(--color-success); font-weight: 780; }
+    .transcript .text { margin: 0; color: var(--color-ink); font-size: 18px; line-height: 1.62; }
+    .workflow { padding: 88px 0 0; scroll-margin-top: 96px; }
+    .workflow-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    .workflow-heading h2 { margin: 0; font-size: 32px; letter-spacing: -.035em; }
+    .workflow-heading p { max-width: 480px; margin: 0; color: var(--color-muted); font-size: 14px; }
+    .workflow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .workflow-card { padding: 24px; }
+    .step-number {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      color: var(--color-primary);
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+      font-size: 12px;
+      font-weight: 820;
+    }
+    .workflow-card h3 { margin: 20px 0 8px; font-size: 18px; }
+    .workflow-card p { margin: 0; color: var(--color-muted); font-size: 13px; line-height: 1.65; }
+    footer {
+      display: flex;
+      justify-content: space-between;
       gap: 24px;
-      border: 1px solid #2a2c27;
-      border-radius: 18px;
-      padding: 20px 22px;
-      background: rgba(29, 31, 27, .82);
-      box-shadow: 0 16px 44px rgba(0, 0, 0, .12);
-      animation: enter .3s ease-out both;
+      border-top: 1px solid var(--color-line);
+      margin-top: 80px;
+      padding: 24px 0 40px;
+      color: var(--color-subtle);
+      font-size: 12px;
     }
-    @keyframes enter {
-      from { opacity: 0; transform: translateY(8px); }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(41, 39, 36, .48);
+      backdrop-filter: blur(5px);
+      animation: fade-in var(--motion-fast) ease-out;
     }
-    .meta { color: #8f958a; font-size: 12px; line-height: 1.6; }
-    .speaker { color: #afc8a9; font-weight: 700; }
-    .text {
-      margin: 0;
-      font-size: clamp(18px, 2.5vw, 24px);
-      line-height: 1.55;
-      overflow-wrap: anywhere;
+    .modal {
+      width: min(440px, 100%);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-card);
+      padding: 24px;
+      background: var(--color-surface-raised);
+      box-shadow: 16px 18px 42px rgba(43, 34, 26, .28), inset 1px 1px 0 rgba(255,255,255,.8);
+      animation: modal-in var(--motion-base) ease-out;
     }
-    @media (max-width: 620px) {
-      main { width: min(100% - 24px, 900px); padding-top: 24px; }
-      .heading { align-items: flex-start; flex-direction: column; }
-      .status-stack { justify-content: flex-start; }
-      .controls { top: 8px; max-height: calc(100vh - 16px); }
-      article { grid-template-columns: 1fr; gap: 8px; padding: 18px; }
-      .meta { display: flex; gap: 10px; }
-      .name-row { grid-template-columns: 1fr; gap: 7px; }
-      .language-row { align-items: flex-start; flex-direction: column; gap: 7px; }
-      .language-row select { width: 100%; }
-      .name-state { min-height: 1em; }
-      .actions { flex-direction: column; }
-      button, .download { width: 100%; }
-      .controls.compact { width: 100%; border-radius: 18px; }
-      .controls.compact .actions {
-        flex-direction: row;
-        padding-right: 58px;
-      }
-      .controls.compact button:not(.compact-toggle) { width: auto; flex: 1; }
+    .modal h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
+    .modal-message { margin: 12px 0 0; color: var(--color-muted); line-height: 1.65; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 50% { opacity: .35; } }
+    @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes fade-in { from { opacity: 0; } }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+    @media (max-width: 960px) {
+      .app-shell { width: min(100% - 40px, 760px); }
+      .topbar { grid-template-columns: 1fr auto; }
+      .nav-links { display: none; }
+      .hero { grid-template-columns: 1fr; gap: 32px; padding: 56px 0 48px; }
+      .status-console { display: grid; grid-template-columns: auto 1fr; gap: 0 24px; }
+      .status-console .section-label, .status-console h2, .status-console .console-note { grid-column: 1; }
+      .status-stack { grid-column: 2; grid-row: 1 / span 3; margin-top: 0; }
+      .workspace { grid-template-columns: 1fr; }
+      .controls { position: static; max-height: none; }
+      .workflow-grid { grid-template-columns: 1fr 1fr; }
+      .workflow-card:last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 600px) {
+      .app-shell { width: min(100% - 28px, 440px); }
+      .topbar { min-height: 64px; }
+      .brand-mark { width: 36px; height: 36px; }
+      .brand > span:last-child { display: none; }
+      .privacy-badge { min-height: 34px; padding: 6px 10px; }
+      .hero { gap: 24px; padding: 40px 0 36px; }
+      h1 { font-size: 40px; line-height: 1.08; }
+      .lede { margin-top: 16px; font-size: 16px; }
+      .hero-meta { grid-template-columns: 1fr; gap: 8px; margin-top: 24px; }
+      .meta-chip { min-height: 60px; padding: 11px 14px; }
+      .status-console { display: block; padding: 20px; }
+      .status-stack { margin-top: 20px; }
+      .workspace { gap: 20px; }
+      .controls, .transcript-panel { padding: 18px; }
+      .control-bar h2, .panel-header h2 { font-size: 21px; }
+      .sources, .actions, .download-row, .name-tools { grid-template-columns: 1fr; }
+      .actions #start { grid-column: auto; }
+      .source-option { min-height: 68px; }
+      .panel-header { align-items: center; }
+      .transcript-panel { min-height: 520px; }
+      .empty { min-height: 330px; padding: 32px 18px; }
+      .transcript article { grid-template-columns: 1fr; gap: 8px; padding: 16px; }
+      .transcript .meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .transcript .text { font-size: 16px; }
+      .workflow { padding-top: 64px; }
+      .workflow-heading { display: block; }
+      .workflow-heading h2 { font-size: 27px; }
+      .workflow-heading p { margin-top: 10px; }
+      .workflow-grid { grid-template-columns: 1fr; }
+      .workflow-card:last-child { grid-column: auto; }
+      footer { display: block; margin-top: 56px; }
+      footer span { display: block; margin-top: 6px; }
+      .modal-backdrop { align-items: end; padding: 12px; }
+      .modal { padding: 20px; }
+      .modal-actions { display: grid; grid-template-columns: 1fr 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <p class="eyebrow">Local meeting capture</p>
-      <div class="heading">
-        <h1>即時逐字稿</h1>
-        <div class="status-stack">
-          <div id="modelStatus" class="status" role="status">
-            <span class="dot"></span><span id="modelStatusText">模型狀態：連線中…</span>
-          </div>
-          <div id="status" class="status" role="status">
-            <span class="dot"></span><span id="statusText">服務狀態：正在連線…</span>
-          </div>
+  <a class="skip-link" href="#workspace">跳到錄音工作台</a>
+  <div class="app-shell">
+    <nav class="topbar" aria-label="主要導覽">
+      <a class="brand" href="#top" aria-label="Live Transcript 首頁">
+        <span class="brand-mark" aria-hidden="true">LT</span>
+        <span>Live Transcript</span>
+      </a>
+      <div class="nav-links">
+        <a href="#workspace">工作台</a>
+        <a href="#transcriptPanel">逐字稿</a>
+        <a href="#howItWorks">使用流程</a>
+      </div>
+      <span class="privacy-badge">On-device AI</span>
+    </nav>
+
+    <header id="top" class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Private meeting workspace</p>
+        <h1>讓每場會議<br><span>留下清楚脈絡。</span></h1>
+        <p class="lede">
+          在自己的 Mac 上即時辨識中文與英文，把你和對方的聲音整理成可保存、可下載的逐字稿。
+        </p>
+        <div class="hero-meta" aria-label="產品特色">
+          <div class="meta-chip"><strong>中英雙語</strong><span>中文、英文或自動偵測</span></div>
+          <div class="meta-chip"><strong>雙音源</strong><span>麥克風與分頁音訊</span></div>
+          <div class="meta-chip"><strong>本機辨識</strong><span>模型只在你的 Mac 運行</span></div>
         </div>
       </div>
+      <aside class="status-console soft-card" aria-label="系統即時狀態">
+        <div>
+          <p class="section-label">System status</p>
+          <h2>現在可以開始嗎？</h2>
+          <p class="console-note">狀態會隨模型載入與錄音即時更新。</p>
+        </div>
+        <div class="status-stack">
+          <div id="modelStatus" class="status" role="status">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="modelStatusText">模型狀態：連線中…</span>
+            <span class="status-loader" aria-hidden="true"></span>
+          </div>
+          <div id="status" class="status" role="status">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="statusText">服務狀態：正在連線…</span>
+            <span class="status-loader" aria-hidden="true"></span>
+          </div>
+        </div>
+      </aside>
     </header>
-    <section id="controls" class="controls" aria-label="錄音控制">
-      <div class="control-bar">
-        <p class="control-title">Recording controls</p>
-        <button
-          id="compactToggle"
-          class="compact-toggle"
-          type="button"
-          aria-expanded="true"
-        >縮小</button>
+
+    <main>
+      <section id="workspace" class="workspace" aria-label="逐字稿工作區">
+        <aside id="controls" class="controls soft-card" aria-label="錄音控制">
+          <div class="control-bar">
+            <div>
+              <p class="section-label">Capture setup</p>
+              <h2>錄音工作台</h2>
+            </div>
+            <button id="compactToggle" class="compact-toggle secondary" type="button" aria-expanded="true">縮小</button>
+          </div>
+
+          <div class="control-content">
+            <p id="secureNotice" class="notice" hidden>
+              瀏覽器只允許 HTTPS 網頁使用麥克風。請改用 HTTPS 網址。
+            </p>
+
+            <fieldset>
+              <legend>音訊來源</legend>
+              <div class="sources">
+                <label class="source-option">
+                  <input id="microphone" type="checkbox" checked>
+                  <span class="source-copy"><strong>麥克風</strong><small>你的聲音</small></span>
+                </label>
+                <label class="source-option">
+                  <input id="systemAudio" type="checkbox">
+                  <span class="source-copy"><strong>分頁音訊</strong><small>會議另一端</small></span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-grid">
+              <div class="field">
+                <div class="field-row">
+                  <label class="field-label" for="language">辨識語言</label>
+                  <span class="language-hint">下一次錄音套用</span>
+                </div>
+                <select id="language">
+                  <option value="zh">中文</option>
+                  <option value="en">英文</option>
+                  <option value="auto">Auto</option>
+                </select>
+              </div>
+
+              <div class="field name-row">
+                <div class="field-row">
+                  <label class="field-label" for="sessionName">逐字稿名稱</label>
+                  <span id="nameState" class="name-state"></span>
+                </div>
+                <div class="name-tools">
+                  <input id="sessionName" type="text" maxlength="80" placeholder="留空會自動命名" autocomplete="off">
+                  <button id="resetSessionName" class="secondary" type="button">重置</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="start" type="button" disabled>開始遠端錄音</button>
+              <button id="modelToggle" class="secondary" type="button">啟用模型</button>
+              <button id="stop" class="secondary" type="button" disabled>停止錄音</button>
+              <button id="clearTranscript" class="danger" type="button" disabled>清除畫面</button>
+            </div>
+
+            <div class="download-row">
+              <a id="download" class="download" href="#" hidden>下載 Markdown</a>
+              <a id="downloadJsonl" class="download" href="#" hidden>下載 JSONL</a>
+            </div>
+
+            <details class="helper">
+              <summary>錄音前提醒</summary>
+              <p>
+                先啟用模型，再開始錄音。分享分頁時請勾選「分享分頁音訊」。停止後會完成辨識、保存檔案並釋放模型記憶體。
+              </p>
+            </details>
+          </div>
+        </aside>
+
+        <section id="transcriptPanel" class="transcript-panel soft-card" aria-labelledby="transcriptTitle">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Live feed</p>
+              <h2 id="transcriptTitle">即時逐字稿</h2>
+            </div>
+            <span id="transcriptCount" class="feed-count">等待內容</span>
+          </div>
+          <div id="processingNotice" class="processing-notice" role="status" aria-live="polite" aria-busy="true" hidden>
+            <span class="processing-spinner" aria-hidden="true"></span>
+            <div>
+              <strong>正在完成剩餘辨識</strong>
+              <span>模型仍在處理排隊中的音訊；完成保存前無法卸載模型或下載檔案。</span>
+            </div>
+          </div>
+          <section id="transcript" class="transcript" aria-live="polite"></section>
+          <div id="empty" class="empty">
+            <div class="empty-content">
+              <span class="empty-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <strong>等待第一段語音</strong>
+              <p>辨識完成的內容會依時間順序出現在這裡。</p>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="howItWorks" class="workflow" aria-labelledby="workflowTitle">
+        <div class="workflow-heading">
+          <div>
+            <p class="section-label">Three simple steps</p>
+            <h2 id="workflowTitle">開始一場清楚的會議記錄</h2>
+          </div>
+          <p>模型按需載入，錄音結束後自動保存並釋放資源，讓常駐服務維持輕量。</p>
+        </div>
+        <div class="workflow-grid">
+          <article class="workflow-card soft-card">
+            <span class="step-number">01</span>
+            <h3>啟用模型</h3>
+            <p>需要錄音時再載入 large-v3-turbo，狀態列會清楚顯示載入進度。</p>
+          </article>
+          <article class="workflow-card soft-card">
+            <span class="step-number">02</span>
+            <h3>選擇音源</h3>
+            <p>使用麥克風記錄自己，也能加入分頁音訊捕捉會議另一端。</p>
+          </article>
+          <article class="workflow-card soft-card">
+            <span class="step-number">03</span>
+            <h3>保存與下載</h3>
+            <p>停止錄音後完成剩餘辨識，並提供 Markdown 與 JSONL 檔案。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <strong>Live Transcript</strong>
+      <span>Private, bilingual meeting notes on your Mac.</span>
+    </footer>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMessage">
+      <p class="section-label">Action required</p>
+      <h2 id="modalTitle">需要確認</h2>
+      <p id="modalMessage" class="modal-message"></p>
+      <div class="modal-actions">
+        <button id="modalCancel" class="secondary" type="button">取消</button>
+        <button id="modalConfirm" type="button">確認</button>
       </div>
-      <p id="secureNotice" class="notice" hidden>
-        瀏覽器只允許 HTTPS 網頁使用麥克風。請改用 HTTPS 網址。
-      </p>
-      <div class="sources">
-        <label>
-          <input id="microphone" type="checkbox" checked>
-          麥克風
-        </label>
-        <label>
-          <input id="systemAudio" type="checkbox">
-          分頁／螢幕音訊
-        </label>
-      </div>
-      <div class="language-row">
-        <label for="language">辨識語言</label>
-        <select id="language">
-          <option value="zh">中文</option>
-          <option value="en">英文</option>
-          <option value="auto">Auto</option>
-        </select>
-        <span class="language-hint">套用到下一次錄音</span>
-      </div>
-      <div class="name-row">
-        <label for="sessionName">逐字稿名稱</label>
-        <input
-          id="sessionName"
-          type="text"
-          maxlength="80"
-          placeholder="留空會自動命名"
-          autocomplete="off"
-        >
-        <span id="nameState" class="name-state"></span>
-        <button id="resetSessionName" class="secondary" type="button">
-          重置為自動名稱
-        </button>
-      </div>
-      <div class="actions">
-        <button id="modelToggle" class="secondary" type="button">啟用模型</button>
-        <button id="start" type="button" disabled>開始遠端錄音</button>
-        <button id="stop" class="secondary" type="button" disabled>停止錄音</button>
-        <button id="clearTranscript" class="danger" type="button" disabled>
-          清除畫面逐字稿
-        </button>
-        <a id="download" class="download" href="#" hidden>下載 Markdown</a>
-        <a id="downloadJsonl" class="download" href="#" hidden>下載 JSONL</a>
-      </div>
-      <p class="hint">
-        先啟用模型，再開始錄音。停止後會完成辨識、保存檔案並自動釋放模型記憶體。
-        分享分頁時請在瀏覽器選擇器中勾選「分享分頁音訊」。
-        「清除畫面逐字稿」不會刪除已保存檔案。
-        「重置為自動名稱」會讓下一場錄音使用新的日期時間檔名，不會改動目前已保存的檔案。
-      </p>
     </section>
-    <section id="transcript" class="transcript" aria-live="polite"></section>
-    <div id="empty" class="empty">逐字稿會在偵測到完整語句後出現在這裡。</div>
-  </main>
+  </div>
   <script>
     const transcript = document.querySelector("#transcript");
     const empty = document.querySelector("#empty");
+    const transcriptCount = document.querySelector("#transcriptCount");
+    const processingNotice = document.querySelector("#processingNotice");
     const controls = document.querySelector("#controls");
     const compactToggle = document.querySelector("#compactToggle");
     const status = document.querySelector("#status");
@@ -486,10 +947,17 @@ PAGE = """<!doctype html>
     const clearTranscriptButton = document.querySelector("#clearTranscript");
     const download = document.querySelector("#download");
     const downloadJsonl = document.querySelector("#downloadJsonl");
+    const modalBackdrop = document.querySelector("#modalBackdrop");
+    const modalDialog = modalBackdrop.querySelector(".modal");
+    const modalTitle = document.querySelector("#modalTitle");
+    const modalMessage = document.querySelector("#modalMessage");
+    const modalCancel = document.querySelector("#modalCancel");
+    const modalConfirm = document.querySelector("#modalConfirm");
     let serverState = "starting";
     let modelState = "unloaded";
     let modelName = "";
     let transcriptHasItems = false;
+    let transcriptFinishing = false;
     let audioSocket = null;
     let audioContext = null;
     let silentOutput = null;
@@ -498,9 +966,68 @@ PAGE = """<!doctype html>
     let currentSession = null;
     let renameTimer = null;
     let nameResetForNextRecording = false;
+    let modalResolver = null;
+    let modalPreviousFocus = null;
     const remoteAudioEnabled = __REMOTE_AUDIO_ENABLED__;
     const modelControlEnabled = __MODEL_CONTROL_ENABLED__;
     language.value = "__DEFAULT_LANGUAGE__";
+
+    function updateTranscriptCount() {
+      const count = transcript.childElementCount;
+      transcriptCount.textContent = count ? `${count} 段內容` : "等待內容";
+    }
+
+    function setEmptyState(title, description) {
+      const content = document.createElement("div");
+      content.className = "empty-content";
+      const heading = document.createElement("strong");
+      heading.textContent = title;
+      const detail = document.createElement("p");
+      detail.textContent = description;
+      content.append(heading, detail);
+      empty.replaceChildren(content);
+      empty.hidden = false;
+      updateTranscriptCount();
+    }
+
+    function closeModal(result) {
+      if (modalBackdrop.hidden) return;
+      modalBackdrop.hidden = true;
+      document.body.style.overflow = "";
+      const resolve = modalResolver;
+      modalResolver = null;
+      if (modalPreviousFocus instanceof HTMLElement) modalPreviousFocus.focus();
+      modalPreviousFocus = null;
+      if (resolve) resolve(result);
+    }
+
+    function showDialog({ title, message, confirmLabel, showCancel, destructive = false }) {
+      if (modalResolver) closeModal(false);
+      modalPreviousFocus = document.activeElement;
+      modalTitle.textContent = title;
+      modalMessage.textContent = message;
+      modalConfirm.textContent = confirmLabel;
+      modalConfirm.classList.toggle("danger", destructive);
+      modalCancel.hidden = !showCancel;
+      modalBackdrop.hidden = false;
+      document.body.style.overflow = "hidden";
+      requestAnimationFrame(() => modalConfirm.focus());
+      return new Promise(resolve => { modalResolver = resolve; });
+    }
+
+    function showAlert(message, title = "請注意") {
+      return showDialog({ title, message, confirmLabel: "知道了", showCancel: false });
+    }
+
+    function showConfirm(message, title = "確認操作") {
+      return showDialog({
+        title,
+        message,
+        confirmLabel: "確認清除",
+        showCancel: true,
+        destructive: true,
+      });
+    }
 
     function setControlsCompact(compact, persist = true) {
       controls.classList.toggle("compact", compact);
@@ -518,8 +1045,18 @@ PAGE = """<!doctype html>
     function setStatus(data) {
       serverState = data.state;
       statusText.textContent = `服務：${data.message}`;
+      const busy = data.state === "processing";
+      status.setAttribute("aria-busy", String(busy));
       status.classList.toggle("live", data.state === "recording");
+      status.classList.toggle("busy", busy);
       status.classList.toggle("ended", data.state === "stopped" || data.state === "error");
+      updateControls();
+    }
+
+    function setProcessingState(processing) {
+      transcriptFinishing = processing;
+      processingNotice.hidden = !processing;
+      processingNotice.setAttribute("aria-busy", String(processing));
       updateControls();
     }
 
@@ -527,11 +1064,10 @@ PAGE = """<!doctype html>
       modelState = data.state;
       modelName = data.name || modelName;
       modelStatusText.textContent = `模型：${data.message}`;
+      const busy = data.state === "loading" || data.state === "unloading";
+      modelStatus.setAttribute("aria-busy", String(busy));
       modelStatus.classList.toggle("model-ready", data.state === "loaded");
-      modelStatus.classList.toggle(
-        "busy",
-        data.state === "loading" || data.state === "unloading",
-      );
+      modelStatus.classList.toggle("busy", busy);
       modelStatus.classList.toggle("ended", data.state === "unloaded" || data.state === "error");
       updateControls();
     }
@@ -539,11 +1075,14 @@ PAGE = """<!doctype html>
     function updateControls() {
       const capturing = audioSocket !== null;
       const serverReady = serverState === "waiting" || serverState === "recording";
+      const serviceBusy = serverState === "processing";
       const modelBusy = modelState === "loading" || modelState === "unloading";
       startButton.disabled =
-        capturing || !serverReady || modelState !== "loaded" || !window.isSecureContext;
+        capturing || transcriptFinishing || !serverReady ||
+        modelState !== "loaded" || !window.isSecureContext;
       stopButton.disabled = !capturing;
-      modelToggle.disabled = capturing || modelBusy || !modelControlEnabled;
+      modelToggle.disabled =
+        capturing || transcriptFinishing || serviceBusy || modelBusy || !modelControlEnabled;
       modelToggle.textContent =
         modelState === "loaded"
           ? "卸載模型"
@@ -578,15 +1117,18 @@ PAGE = """<!doctype html>
       text.textContent = data.text;
       article.append(meta, text);
       transcript.append(article);
-      article.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      article.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "nearest",
+      });
+      updateTranscriptCount();
       updateControls();
     }
 
     function clearTranscriptDisplay() {
       transcript.replaceChildren();
       transcriptHasItems = false;
-      empty.textContent = "逐字稿畫面已清除；已保存檔案不受影響。";
-      empty.hidden = false;
+      setEmptyState("畫面已清除", "已保存的 Markdown 與 JSONL 檔案不受影響。");
       updateControls();
     }
 
@@ -601,20 +1143,30 @@ PAGE = """<!doctype html>
       if (isNew) {
         transcript.replaceChildren();
         transcriptHasItems = false;
-        empty.textContent = "逐字稿會在偵測到完整語句後出現在這裡。";
-        empty.hidden = false;
+        setEmptyState("等待第一段語音", "辨識完成的內容會依時間順序出現在這裡。");
       }
       currentSession = data;
       if (isNew || document.activeElement !== sessionName) {
         sessionName.value = data.name || "";
       }
       const saved = data.state === "saved";
+      const finishing = data.state === "finishing";
+      if (finishing) setProcessingState(true);
+      if (saved || data.state === "error") setProcessingState(false);
       download.hidden = !saved || !data.download_url;
       downloadJsonl.hidden = !saved || !data.jsonl_url;
       if (data.download_url) download.href = data.download_url;
       if (data.jsonl_url) downloadJsonl.href = data.jsonl_url;
       nameState.textContent =
-        data.state === "recording" ? "錄音中" : saved ? "已保存" : "";
+        transcriptFinishing
+          ? "完成辨識中…"
+          : data.state === "recording"
+            ? "錄音中"
+            : saved
+              ? "已保存"
+              : data.state === "error"
+                ? "保存失敗"
+                : "";
     }
 
     async function renameSession() {
@@ -646,7 +1198,7 @@ PAGE = """<!doctype html>
     function resetNameForNextRecording() {
       clearTimeout(renameTimer);
       if (audioSocket) {
-        window.alert("錄音進行中，請停止錄音後再重置下一場名稱");
+        showAlert("錄音進行中，請停止錄音後再重置下一場名稱。");
         return;
       }
       nameResetForNextRecording = true;
@@ -673,6 +1225,10 @@ PAGE = """<!doctype html>
     }
 
     async function toggleModel() {
+      if (transcriptFinishing) {
+        await showAlert("剩餘音訊仍在辨識與保存中，完成前無法卸載模型。");
+        return;
+      }
       const action = modelState === "loaded" ? "unload" : "load";
       modelToggle.disabled = true;
       try {
@@ -684,7 +1240,7 @@ PAGE = """<!doctype html>
         const result = await readJsonBody(response, "模型服務暫時無法回應");
         if (!response.ok) throw new Error(result.message || "無法變更模型狀態");
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "模型控制失敗");
+        await showAlert(error instanceof Error ? error.message : "模型控制失敗");
       } finally {
         updateControls();
       }
@@ -697,12 +1253,9 @@ PAGE = """<!doctype html>
         body: JSON.stringify({ confirmed }),
       });
       const result = await readJsonBody(response, "清除逐字稿服務暫時無法回應");
-      if (
-        response.status === 409 &&
-        result.confirmation_required &&
-        window.confirm(result.message)
-      ) {
-        return requestTranscriptClear(true);
+      if (response.status === 409 && result.confirmation_required) {
+        if (await showConfirm(result.message)) return requestTranscriptClear(true);
+        return { ok: false, cancelled: true };
       }
       if (!response.ok) throw new Error(result.message || "無法清除逐字稿");
       return result;
@@ -735,7 +1288,7 @@ PAGE = """<!doctype html>
                 reject(new Error(message.message));
               } else {
                 setStatus({ state: "error", message: message.message });
-                stopCapture();
+                stopCapture(true, false);
               }
             }
           } catch (_) {
@@ -794,11 +1347,11 @@ PAGE = """<!doctype html>
         return;
       }
       if (!microphone.checked && !systemAudio.checked) {
-        window.alert("請至少選擇一個音訊來源");
+        await showAlert("請至少選擇一個音訊來源。");
         return;
       }
       if (modelState !== "loaded") {
-        window.alert("請先啟用模型並等待載入完成");
+        await showAlert("請先啟用模型並等待載入完成。");
         return;
       }
 
@@ -825,7 +1378,7 @@ PAGE = """<!doctype html>
             const message = "所選分頁沒有音訊；請在分享選擇器中勾選分享分頁音訊";
             if (!microphone.checked) throw new Error(message);
             systemAudio.checked = false;
-            window.alert(`${message}。本次將繼續只錄麥克風。`);
+            await showAlert(`${message}。本次將繼續只錄麥克風。`);
           } else {
             displayAudioTrack.addEventListener("ended", () => {
               if (!audioSocket) return;
@@ -868,9 +1421,13 @@ PAGE = """<!doctype html>
       }
     }
 
-    async function stopCapture(closeSocket = true) {
+    async function stopCapture(closeSocket = true, showProcessing = closeSocket) {
       const socket = audioSocket;
-      if (socket) nameState.textContent = "保存中…";
+      if (socket && showProcessing) {
+        setProcessingState(true);
+        setStatus({ state: "processing", message: "正在辨識剩餘音訊並保存逐字稿" });
+        nameState.textContent = "完成辨識中…";
+      }
       audioSocket = null;
       audioNodes.forEach(node => {
         node.disconnect();
@@ -897,6 +1454,31 @@ PAGE = """<!doctype html>
         setStatus({ state: "connecting", message: "重新連線中…" });
       }
     };
+    modalConfirm.addEventListener("click", () => closeModal(true));
+    modalCancel.addEventListener("click", () => closeModal(false));
+    modalBackdrop.addEventListener("click", event => {
+      if (event.target === modalBackdrop) closeModal(false);
+    });
+    document.addEventListener("keydown", event => {
+      if (modalBackdrop.hidden) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeModal(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...modalDialog.querySelectorAll("button:not([hidden]):not(:disabled)")];
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
     modelToggle.addEventListener("click", toggleModel);
     resetSessionName.addEventListener("pointerdown", () => {
       nameResetForNextRecording = true;
@@ -905,6 +1487,9 @@ PAGE = """<!doctype html>
     startButton.addEventListener("click", startCapture);
     stopButton.addEventListener("click", async () => {
       clearTimeout(renameTimer);
+      setProcessingState(true);
+      setStatus({ state: "processing", message: "正在辨識剩餘音訊並保存逐字稿" });
+      nameState.textContent = "完成辨識中…";
       await renameSession();
       await stopCapture();
     });
@@ -913,7 +1498,7 @@ PAGE = """<!doctype html>
       try {
         await requestTranscriptClear();
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "清除逐字稿失敗");
+        await showAlert(error instanceof Error ? error.message : "清除逐字稿失敗");
       } finally {
         updateControls();
       }
@@ -938,6 +1523,7 @@ PAGE = """<!doctype html>
       setControlsCompact(false, false);
     }
     secureNotice.hidden = window.isSecureContext;
+    updateTranscriptCount();
     updateControls();
   </script>
 </body>
