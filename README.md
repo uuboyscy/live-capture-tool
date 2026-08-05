@@ -17,6 +17,15 @@
 - 遠端電腦建議使用最新版 Chrome 或 Edge
 - 遠端錄音需使用 HTTPS 網頁；瀏覽器不允許一般 HTTP 網頁使用麥克風
 
+## iOS 27 App（開發中）
+
+`ios/` 內含獨立的 SwiftUI App。它沿用同一個 Mac 逐字稿伺服器，模型仍只在
+Apple Silicon Mac 上執行；App 使用 iOS 27 ScreenCaptureKit 擷取系統音訊與
+選用的麥克風，或改用僅麥克風模式。現有電腦網頁版與啟動方式不受影響。
+
+iOS App 需要完整的 Xcode 27 與 iOS 27 SDK。建置及真機測試方式請參考
+[`ios/README.md`](ios/README.md)。
+
 ## 安裝與第一次準備
 
 ```bash
