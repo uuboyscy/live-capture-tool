@@ -10,3 +10,8 @@ transcripts/
 logs/
 *.log
 *.wav
+ios/.build/
+ios/DerivedData/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+*.xcuserstate
