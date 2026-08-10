@@ -61,6 +61,7 @@ class RemoteAudioReceiverTests(unittest.TestCase):
                 transcripts.append,
                 publish_session,
                 lambda state, message: statuses.append((state, message)),
+                publish_note=transcripts.append,
                 threshold=100,
                 silence_seconds=0.1,
                 max_segment_seconds=15,
@@ -75,6 +76,8 @@ class RemoteAudioReceiverTests(unittest.TestCase):
             self.assertEqual(engine.language, "zh")
 
             session = receiver.rename_session(session["id"], "產品會議 final")
+            note = receiver.add_note(session["id"], "**記得追蹤** API 規格")
+            self.assertGreaterEqual(note.timestamp_seconds, 0)
             receiver.feed("first", AudioSource.MICROPHONE, make_pcm([2_000] * 8_000))
             receiver.feed("first", AudioSource.MICROPHONE, make_pcm([0] * 2_000))
             receiver.close("first")
@@ -82,7 +85,9 @@ class RemoteAudioReceiverTests(unittest.TestCase):
             markdown_path, filename = receiver.download(session["id"], "markdown")
             self.assertEqual(filename, "產品會議 final.md")
             self.assertIn("遠端語音測試", markdown_path.read_text())
-            self.assertEqual(len(transcripts), 1)
+            self.assertIn("## 會議筆記", markdown_path.read_text())
+            self.assertIn("**記得追蹤** API 規格", markdown_path.read_text())
+            self.assertEqual(len(transcripts), 2)
             self.assertEqual(statuses[0][0], "recording")
             self.assertEqual(statuses[-1][0], "waiting")
             self.assertEqual([item["state"] for item in sessions[-2:]], ["finishing", "saved"])

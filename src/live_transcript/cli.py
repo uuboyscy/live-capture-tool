@@ -107,6 +107,7 @@ def run_remote_server(args: argparse.Namespace) -> int:
         hub.publish_transcript,
         hub.publish_session,
         hub.set_status,
+        publish_note=hub.publish_note,
         threshold=args.vad_threshold,
         silence_seconds=args.silence,
         max_segment_seconds=args.max_segment,

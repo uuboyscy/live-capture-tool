@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from live_transcript.audio import AudioSource
-from live_transcript.transcription import TranscriptEvent
+from live_transcript.transcription import NoteEvent, TranscriptEvent
 from live_transcript.web import EventHub, LiveTranscriptServer, _encode_event
 
 
@@ -17,6 +17,7 @@ class EventHubTests(unittest.TestCase):
         hub = EventHub()
         hub.set_status("recording", "錄製中")
         hub.publish_transcript(TranscriptEvent(AudioSource.SYSTEM, 3, 5, "Hello"))
+        hub.publish_note(NoteEvent(4, "**Follow up**"))
 
         subscriber, initial = hub.subscribe()
         self.addCleanup(hub.unsubscribe, subscriber)
@@ -25,11 +26,15 @@ class EventHubTests(unittest.TestCase):
         transcript = next(item for item in initial if item["type"] == "transcript")
         self.assertEqual(transcript["text"], "Hello")
         self.assertEqual(transcript["timestamp"], "00:00:03")
+        note = next(item for item in initial if item["type"] == "note")
+        self.assertEqual(note["timestamp"], "00:00:04")
+        self.assertEqual(note["text"], "**Follow up**")
 
     def test_clear_requires_confirmation_before_session_is_saved(self) -> None:
         hub = EventHub()
         hub.publish_session({"id": "demo", "state": "recording"})
         hub.publish_transcript(TranscriptEvent(AudioSource.SYSTEM, 3, 5, "Hello"))
+        hub.publish_note(NoteEvent(4, "待辦"))
 
         cleared, message = hub.clear_transcripts(confirmed=False)
         self.assertFalse(cleared)
@@ -40,6 +45,7 @@ class EventHubTests(unittest.TestCase):
         subscriber, initial = hub.subscribe()
         self.addCleanup(hub.unsubscribe, subscriber)
         self.assertFalse(any(item["type"] == "transcript" for item in initial))
+        self.assertFalse(any(item["type"] == "note" for item in initial))
 
     def test_saved_session_can_be_cleared_without_confirmation(self) -> None:
         hub = EventHub()
@@ -76,6 +82,13 @@ class ServerTests(unittest.TestCase):
         self.assertIn('id="modalBackdrop"', body)
         self.assertIn('id="transcriptCount"', body)
         self.assertIn('id="processingNotice"', body)
+        self.assertIn('id="noteToggle"', body)
+        self.assertIn('id="noteComposer"', body)
+        self.assertIn('id="noteInput"', body)
+        self.assertIn('id="notesSection"', body)
+        self.assertIn('id="transcriptScroll"', body)
+        self.assertIn("transcriptScroll.scrollTo", body)
+        self.assertNotIn("article.scrollIntoView", body)
         self.assertIn("正在完成剩餘辨識", body)
         self.assertIn("prefers-reduced-motion", body)
         self.assertIn("--radius-control: 12px", body)
@@ -225,6 +238,30 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(response.read(), b"# Saved")
             connection.close()
 
+    def test_adds_timeline_note_to_active_session(self) -> None:
+        receiver = FakeAudioReceiver()
+        server = LiveTranscriptServer("127.0.0.1", 0, audio_receiver=receiver)
+        server.start()
+        self.addCleanup(server.stop)
+        port = server._server.server_port
+
+        connection = http.client.HTTPConnection("127.0.0.1", port)
+        connection.request(
+            "POST",
+            "/sessions/demo/notes",
+            body='{"text":"## 決策\\n- 先驗證登入"}'.encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Origin": f"http://127.0.0.1:{port}",
+            },
+        )
+        response = connection.getresponse()
+        payload = response.read().decode()
+        self.assertEqual(response.status, 201)
+        self.assertIn('"timestamp": "00:00:12"', payload)
+        self.assertEqual(receiver.note_text, "## 決策\n- 先驗證登入")
+        connection.close()
+
 
 class FakeAudioReceiver:
     def __init__(self) -> None:
@@ -232,6 +269,7 @@ class FakeAudioReceiver:
         self.source = None
         self.pcm = None
         self.download_path = None
+        self.note_text = None
 
     def open(self, _client_id: str, requested_name=None, requested_language=None):
         self.requested_language = requested_language
@@ -259,6 +297,10 @@ class FakeAudioReceiver:
             "download_url": f"/sessions/{session_id}/download",
             "jsonl_url": f"/sessions/{session_id}/download?format=jsonl",
         }
+
+    def add_note(self, _session_id: str, text: str):
+        self.note_text = text
+        return NoteEvent(12, text)
 
     def download(self, _session_id: str, _file_format: str):
         if self.download_path is None:

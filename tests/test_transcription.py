@@ -7,6 +7,7 @@ from unittest.mock import patch
 from live_transcript.audio import AudioSource
 from live_transcript.transcription import (
     EchoDeduplicator,
+    NoteEvent,
     TranscriptEvent,
     TranscriptWriter,
     WhisperEngine,
@@ -48,6 +49,22 @@ class TranscriptTests(unittest.TestCase):
             self.assertIn("對方／系統：測試", (Path(directory) / "transcript.md").read_text())
             self.assertIn('"text": "測試"', (Path(directory) / "transcript.jsonl").read_text())
             self.assertEqual(events, [event])
+
+    def test_writer_appends_markdown_notes_after_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            notes = []
+            writer = TranscriptWriter(Path(directory), on_note=notes.append)
+            writer.write_note(NoteEvent(65.8, "## 決策\n\n- 先做登入流程"))
+            writer.write(TranscriptEvent(AudioSource.SYSTEM, 70, 72, "稍後才辨識完成"))
+            writer.close()
+
+            markdown = (Path(directory) / "transcript.md").read_text()
+            jsonl = (Path(directory) / "transcript.jsonl").read_text()
+            self.assertLess(markdown.index("稍後才辨識完成"), markdown.index("## 會議筆記"))
+            self.assertIn("### [00:01:05]", markdown)
+            self.assertIn("- 先做登入流程", markdown)
+            self.assertIn('"type": "note"', jsonl)
+            self.assertEqual(notes, [NoteEvent(65.8, "## 決策\n\n- 先做登入流程")])
 
     def test_model_lifecycle_loads_on_demand_and_unloads_after_session(self) -> None:
         states = []

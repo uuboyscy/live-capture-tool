@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .audio import AudioSource, VoiceSegmenter
 from .transcription import (
+    NoteEvent,
     TranscriptWriter,
     TranscriptionWorker,
     WhisperEngine,
@@ -61,6 +62,7 @@ class RemoteAudioReceiver:
         publish_session: Callable[[dict[str, str | None]], None],
         set_status: Callable[[str, str], None],
         *,
+        publish_note: Callable[[NoteEvent], None] | None = None,
         threshold: float,
         silence_seconds: float,
         max_segment_seconds: float,
@@ -68,6 +70,7 @@ class RemoteAudioReceiver:
         self._engine = engine
         self._output_root = output_root
         self._publish_transcript = publish_transcript
+        self._publish_note = publish_note
         self._publish_session = publish_session
         self._set_status = set_status
         self._threshold = threshold
@@ -110,6 +113,7 @@ class RemoteAudioReceiver:
                 writer = TranscriptWriter(
                     output_dir,
                     on_event=self._publish_transcript,
+                    on_note=self._publish_note,
                     filename_stem=name,
                 )
                 worker = TranscriptionWorker(self._engine, writer)
@@ -269,6 +273,27 @@ class RemoteAudioReceiver:
             payload = record.payload()
         self._publish_session(payload)
         return payload
+
+    def add_note(self, session_id: str, text: str) -> NoteEvent:
+        normalized = text.strip()
+        if not normalized:
+            raise ValueError("筆記內容不可為空白")
+        if len(normalized) > 20_000:
+            raise ValueError("單段筆記不可超過 20,000 個字元")
+        with self._lock:
+            record = self._sessions.get(session_id)
+            if record is None:
+                raise KeyError("找不到逐字稿 session")
+            if (
+                record.state != "recording"
+                or record.writer is None
+                or self._active_session_id != session_id
+                or self._opened_at is None
+            ):
+                raise RuntimeError("只能在錄音進行中新增筆記")
+            event = NoteEvent(time.monotonic() - self._opened_at, normalized)
+            record.writer.write_note(event)
+        return event
 
     def download(
         self,

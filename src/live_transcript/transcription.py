@@ -37,6 +37,12 @@ class TranscriptEvent:
     detected_language: str | None = None
 
 
+@dataclass(slots=True)
+class NoteEvent:
+    timestamp_seconds: float
+    text: str
+
+
 def format_timestamp(seconds: float) -> str:
     total = max(0, int(seconds))
     hours, remainder = divmod(total, 3600)
@@ -71,6 +77,7 @@ class TranscriptWriter:
         self,
         output_dir: Path,
         on_event: Callable[[TranscriptEvent], None] | None = None,
+        on_note: Callable[[NoteEvent], None] | None = None,
         filename_stem: str = "transcript",
     ) -> None:
         if not filename_stem or Path(filename_stem).name != filename_stem:
@@ -81,6 +88,8 @@ class TranscriptWriter:
         self._markdown = self.markdown_path.open("w", encoding="utf-8")
         self._jsonl = self.jsonl_path.open("w", encoding="utf-8")
         self._on_event = on_event
+        self._on_note = on_note
+        self._notes: list[NoteEvent] = []
         self._lock = threading.RLock()
         self._closed = False
         started = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -108,6 +117,25 @@ class TranscriptWriter:
             self._jsonl.flush()
         if self._on_event is not None:
             self._on_event(event)
+
+    def write_note(self, event: NoteEvent) -> None:
+        text = event.text.strip()
+        if not text:
+            raise ValueError("筆記內容不可為空白")
+        event = NoteEvent(max(0, event.timestamp_seconds), text)
+        payload = {
+            "type": "note",
+            "timestamp_seconds": round(event.timestamp_seconds, 3),
+            "text": event.text,
+        }
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("逐字稿檔案已關閉")
+            self._notes.append(event)
+            self._jsonl.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            self._jsonl.flush()
+        if self._on_note is not None:
+            self._on_note(event)
 
     def rename(self, filename_stem: str) -> tuple[Path, Path]:
         if not filename_stem or Path(filename_stem).name != filename_stem:
@@ -137,6 +165,11 @@ class TranscriptWriter:
         with self._lock:
             if self._closed:
                 return
+            if self._notes:
+                self._markdown.write("\n## 會議筆記\n\n")
+                for note in self._notes:
+                    timestamp = format_timestamp(note.timestamp_seconds)
+                    self._markdown.write(f"### [{timestamp}]\n\n{note.text}\n\n")
             self._markdown.close()
             self._jsonl.close()
             self._closed = True

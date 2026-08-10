@@ -15,7 +15,7 @@ from typing import Any, Callable, Protocol
 from urllib.parse import parse_qs, quote, urlsplit
 
 from .audio import AudioSource
-from .transcription import TranscriptEvent, format_timestamp
+from .transcription import NoteEvent, TranscriptEvent, format_timestamp
 
 
 WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -39,6 +39,8 @@ class AudioReceiver(Protocol):
         session_id: str,
         requested_name: str,
     ) -> dict[str, str | None]: ...
+
+    def add_note(self, session_id: str, text: str) -> NoteEvent: ...
 
     def download(
         self,
@@ -123,7 +125,7 @@ PAGE = """<!doctype html>
       font-size: 16px;
       line-height: 1.5;
     }
-    button, input, select { font: inherit; }
+    button, input, select, textarea { font: inherit; }
     button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
     [hidden] { display: none !important; }
     .skip-link {
@@ -552,6 +554,7 @@ PAGE = """<!doctype html>
       border-bottom: 1px solid var(--color-line);
       padding-bottom: 20px;
     }
+    .note-toggle { min-height: 38px; padding: 8px 12px; font-size: 12px; }
     .feed-count {
       flex: none;
       border: 1px solid var(--color-line);
@@ -562,6 +565,13 @@ PAGE = """<!doctype html>
       box-shadow: var(--shadow-pressed);
       font-size: 11px;
       font-weight: 720;
+    }
+    .transcript-scroll {
+      max-height: max(360px, 52vh);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding-right: 4px;
     }
     .transcript { display: grid; gap: 12px; margin-top: 20px; }
     .empty {
@@ -611,6 +621,84 @@ PAGE = """<!doctype html>
     .transcript .meta { color: var(--color-subtle); font-size: 11px; line-height: 1.65; }
     .transcript .speaker { color: var(--color-success); font-weight: 780; }
     .transcript .text { margin: 0; color: var(--color-ink); font-size: 18px; line-height: 1.62; }
+    .note-dock {
+      margin-top: 20px;
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-card);
+      padding: 14px;
+      background: rgba(241, 236, 227, .96);
+      box-shadow: 0 -10px 28px rgba(86, 69, 51, .12), var(--shadow-control);
+    }
+    .note-dock-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .note-dock-title { min-width: 0; }
+    .note-dock-title span { display: block; color: var(--color-primary); font-size: 10px; font-weight: 820; letter-spacing: .1em; text-transform: uppercase; }
+    .note-dock-title strong { display: block; margin-top: 2px; font-size: 14px; }
+    .note-composer {
+      margin-top: 14px;
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+      padding: 18px;
+      background: var(--color-surface-inset);
+      box-shadow: var(--shadow-pressed);
+    }
+    .note-composer-header, .notes-heading, .note-composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .note-composer-header label { color: var(--color-ink); font-size: 14px; font-weight: 780; }
+    .note-timeline { color: var(--color-primary); font-size: 12px; font-weight: 780; }
+    #noteInput {
+      width: 100%;
+      min-height: 150px;
+      margin-top: 12px;
+      resize: vertical;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 14px;
+      color: var(--color-ink);
+      background: var(--color-surface-raised);
+      box-shadow: var(--shadow-pressed);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      outline: none;
+    }
+    #noteInput:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+    #noteInput:disabled { cursor: not-allowed; opacity: .62; }
+    .note-composer-footer { align-items: flex-end; margin-top: 12px; }
+    .note-hint { margin: 0; color: var(--color-subtle); font-size: 11px; line-height: 1.5; }
+    .note-submit { flex: none; min-width: 92px; }
+    .notes-section { margin-top: 32px; border-top: 1px solid var(--color-line); padding-top: 24px; }
+    .notes-heading h3 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+    .notes { display: grid; gap: 12px; margin-top: 14px; }
+    .note-card {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 20px;
+      border: 1px solid #d6b37b;
+      border-radius: var(--radius-control);
+      padding: 18px;
+      background: #f3e3c7;
+      animation: enter var(--motion-base) ease-out both;
+    }
+    .note-card time { color: var(--color-warning); font-size: 11px; font-weight: 780; }
+    .note-markdown {
+      margin: 0;
+      overflow: auto;
+      color: var(--color-ink);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.65;
+    }
     .workflow { padding: 88px 0 0; scroll-margin-top: 96px; }
     .workflow-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
     .workflow-heading h2 { margin: 0; font-size: 32px; letter-spacing: -.035em; }
@@ -704,10 +792,14 @@ PAGE = """<!doctype html>
       .source-option { min-height: 68px; }
       .panel-header { align-items: center; }
       .transcript-panel { min-height: 520px; }
+      .transcript-scroll { max-height: 52vh; }
       .empty { min-height: 330px; padding: 32px 18px; }
       .transcript article { grid-template-columns: 1fr; gap: 8px; padding: 16px; }
       .transcript .meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
       .transcript .text { font-size: 16px; }
+      .note-card { grid-template-columns: 1fr; gap: 8px; padding: 16px; }
+      .note-dock { padding: 12px; }
+      .note-composer-footer { align-items: stretch; flex-direction: column; }
       .workflow { padding-top: 64px; }
       .workflow-heading { display: block; }
       .workflow-heading h2 { font-size: 27px; }
@@ -867,14 +959,43 @@ PAGE = """<!doctype html>
               <span>模型仍在處理排隊中的音訊；完成保存前無法卸載模型或下載檔案。</span>
             </div>
           </div>
-          <section id="transcript" class="transcript" aria-live="polite"></section>
-          <div id="empty" class="empty">
-            <div class="empty-content">
-              <span class="empty-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-              <strong>等待第一段語音</strong>
-              <p>辨識完成的內容會依時間順序出現在這裡。</p>
+          <div id="transcriptScroll" class="transcript-scroll">
+            <section id="transcript" class="transcript" aria-live="polite"></section>
+            <div id="empty" class="empty">
+              <div class="empty-content">
+                <span class="empty-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <strong>等待第一段語音</strong>
+                <p>辨識完成的內容會依時間順序出現在這裡。</p>
+              </div>
             </div>
+            <section id="notesSection" class="notes-section" aria-labelledby="notesTitle" hidden>
+              <div class="notes-heading">
+                <h3 id="notesTitle">會議筆記</h3>
+                <span id="noteCount" class="feed-count">0 段筆記</span>
+              </div>
+              <div id="notes" class="notes"></div>
+            </section>
           </div>
+          <section class="note-dock" aria-labelledby="noteDockTitle">
+            <div class="note-dock-bar">
+              <div class="note-dock-title">
+                <span>Meeting notes</span>
+                <strong id="noteDockTitle">Markdown 隨手筆記</strong>
+              </div>
+              <button id="noteToggle" class="note-toggle secondary" type="button" aria-expanded="false" aria-controls="noteComposer">開啟筆記</button>
+            </div>
+            <div id="noteComposer" class="note-composer" hidden>
+              <div class="note-composer-header">
+                <label for="noteInput">筆記內容</label>
+                <span id="noteTimeline" class="note-timeline">timeline --:--:--</span>
+              </div>
+              <textarea id="noteInput" maxlength="20000" placeholder="例如：&#10;## 決策&#10;- 下週先驗證登入流程"></textarea>
+              <div class="note-composer-footer">
+                <p id="noteHint" class="note-hint">錄音進行中可送出；送出時會自動附上 timeline 時間。</p>
+                <button id="noteSubmit" class="note-submit" type="button" disabled>送出筆記</button>
+              </div>
+            </div>
+          </section>
         </section>
       </section>
 
@@ -925,8 +1046,18 @@ PAGE = """<!doctype html>
   </div>
   <script>
     const transcript = document.querySelector("#transcript");
+    const transcriptScroll = document.querySelector("#transcriptScroll");
     const empty = document.querySelector("#empty");
     const transcriptCount = document.querySelector("#transcriptCount");
+    const noteToggle = document.querySelector("#noteToggle");
+    const noteComposer = document.querySelector("#noteComposer");
+    const noteTimeline = document.querySelector("#noteTimeline");
+    const noteInput = document.querySelector("#noteInput");
+    const noteHint = document.querySelector("#noteHint");
+    const noteSubmit = document.querySelector("#noteSubmit");
+    const notesSection = document.querySelector("#notesSection");
+    const notes = document.querySelector("#notes");
+    const noteCount = document.querySelector("#noteCount");
     const processingNotice = document.querySelector("#processingNotice");
     const controls = document.querySelector("#controls");
     const compactToggle = document.querySelector("#compactToggle");
@@ -964,6 +1095,8 @@ PAGE = """<!doctype html>
     let captureStreams = [];
     let audioNodes = [];
     let currentSession = null;
+    let recordingStartedAt = null;
+    let noteSubmitting = false;
     let renameTimer = null;
     let nameResetForNextRecording = false;
     let modalResolver = null;
@@ -973,8 +1106,28 @@ PAGE = """<!doctype html>
     language.value = "__DEFAULT_LANGUAGE__";
 
     function updateTranscriptCount() {
-      const count = transcript.childElementCount;
-      transcriptCount.textContent = count ? `${count} 段內容` : "等待內容";
+      const transcriptItems = transcript.childElementCount;
+      const noteItems = notes.childElementCount;
+      transcriptCount.textContent = transcriptItems || noteItems
+        ? `${transcriptItems} 段逐字稿 · ${noteItems} 段筆記`
+        : "等待內容";
+      noteCount.textContent = `${noteItems} 段筆記`;
+    }
+
+    function formatTimeline(seconds) {
+      const total = Math.max(0, Math.floor(seconds));
+      const hours = String(Math.floor(total / 3600)).padStart(2, "0");
+      const minutes = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+      const secs = String(total % 60).padStart(2, "0");
+      return `${hours}:${minutes}:${secs}`;
+    }
+
+    function updateNoteTimeline() {
+      if (recordingStartedAt === null || !audioSocket) {
+        noteTimeline.textContent = "timeline --:--:--";
+        return;
+      }
+      noteTimeline.textContent = `timeline ${formatTimeline((performance.now() - recordingStartedAt) / 1000)}`;
     }
 
     function setEmptyState(title, description) {
@@ -1098,11 +1251,23 @@ PAGE = """<!doctype html>
       language.disabled = capturing;
       microphone.disabled = capturing;
       systemAudio.disabled = capturing;
+      const canSubmitNote =
+        capturing && currentSession?.state === "recording" && noteInput.value.trim() && !noteSubmitting;
+      noteSubmit.disabled = !canSubmitNote;
+      noteInput.disabled = !capturing || currentSession?.state !== "recording" || noteSubmitting;
+      noteHint.textContent = capturing
+        ? "支援 Markdown；送出時會自動附上目前的 timeline 時間。"
+        : "開始錄音後即可送出筆記，並自動對應逐字稿 timeline。";
     }
 
     function addTranscript(data) {
       transcriptHasItems = true;
       empty.hidden = true;
+      const wasNearBottom =
+        transcriptScroll.scrollHeight - transcriptScroll.scrollTop - transcriptScroll.clientHeight < 96;
+      const noteIsBeingEdited =
+        !noteComposer.hidden &&
+        (document.activeElement === noteInput || noteInput.value.trim().length > 0);
       const article = document.createElement("article");
       const meta = document.createElement("div");
       meta.className = "meta";
@@ -1117,16 +1282,70 @@ PAGE = """<!doctype html>
       text.textContent = data.text;
       article.append(meta, text);
       transcript.append(article);
-      article.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "nearest",
-      });
+      if (wasNearBottom && !noteIsBeingEdited) {
+        requestAnimationFrame(() => {
+          transcriptScroll.scrollTo({
+            top: transcriptScroll.scrollHeight,
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          });
+        });
+      }
       updateTranscriptCount();
       updateControls();
     }
 
+    function addNote(data) {
+      transcriptHasItems = true;
+      notesSection.hidden = false;
+      const article = document.createElement("article");
+      article.className = "note-card";
+      const timestamp = document.createElement("time");
+      timestamp.textContent = data.timestamp;
+      const content = document.createElement("pre");
+      content.className = "note-markdown";
+      content.textContent = data.text;
+      article.append(timestamp, content);
+      notes.append(article);
+      updateTranscriptCount();
+      updateControls();
+    }
+
+    function setNoteComposerOpen(open) {
+      noteComposer.hidden = !open;
+      noteToggle.textContent = open ? "縮小筆記" : "開啟筆記";
+      noteToggle.setAttribute("aria-expanded", String(open));
+      if (open) requestAnimationFrame(() => noteInput.focus());
+    }
+
+    async function submitNote() {
+      const text = noteInput.value.trim();
+      if (!text || !currentSession || currentSession.state !== "recording" || !audioSocket) return;
+      noteSubmitting = true;
+      updateControls();
+      try {
+        const response = await fetch(`/sessions/${currentSession.id}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const result = await readJsonBody(response, "筆記服務暫時無法回應");
+        if (!response.ok) throw new Error(result.message || "無法送出筆記");
+        noteInput.value = "";
+        noteHint.textContent = `已記錄於 timeline ${result.note.timestamp}`;
+      } catch (error) {
+        await showAlert(error instanceof Error ? error.message : "送出筆記失敗");
+      } finally {
+        noteSubmitting = false;
+        updateControls();
+        noteInput.focus();
+      }
+    }
+
     function clearTranscriptDisplay() {
       transcript.replaceChildren();
+      notes.replaceChildren();
+      transcriptScroll.scrollTop = 0;
+      notesSection.hidden = true;
       transcriptHasItems = false;
       setEmptyState("畫面已清除", "已保存的 Markdown 與 JSONL 檔案不受影響。");
       updateControls();
@@ -1142,10 +1361,15 @@ PAGE = """<!doctype html>
       const isNew = !currentSession || currentSession.id !== data.id;
       if (isNew) {
         transcript.replaceChildren();
+        notes.replaceChildren();
+        transcriptScroll.scrollTop = 0;
+        notesSection.hidden = true;
+        noteInput.value = "";
         transcriptHasItems = false;
         setEmptyState("等待第一段語音", "辨識完成的內容會依時間順序出現在這裡。");
       }
       currentSession = data;
+      if (data.state !== "recording") recordingStartedAt = null;
       if (isNew || document.activeElement !== sessionName) {
         sessionName.value = data.name || "";
       }
@@ -1167,6 +1391,8 @@ PAGE = """<!doctype html>
               : data.state === "error"
                 ? "保存失敗"
                 : "";
+      updateNoteTimeline();
+      updateControls();
     }
 
     async function renameSession() {
@@ -1409,6 +1635,8 @@ PAGE = """<!doctype html>
 
         if (selectedStreams.length === 0) throw new Error("沒有可使用的音訊來源");
         audioSocket = await openAudioSocket();
+        recordingStartedAt = performance.now();
+        updateNoteTimeline();
         selectedStreams.forEach(([stream, sourceId]) => attachAudioStream(stream, sourceId));
         await audioContext.resume();
         updateControls();
@@ -1429,6 +1657,8 @@ PAGE = """<!doctype html>
         nameState.textContent = "完成辨識中…";
       }
       audioSocket = null;
+      recordingStartedAt = null;
+      updateNoteTimeline();
       audioNodes.forEach(node => {
         node.disconnect();
         if ("onaudioprocess" in node) node.onaudioprocess = null;
@@ -1447,6 +1677,7 @@ PAGE = """<!doctype html>
     events.addEventListener("status", event => setStatus(JSON.parse(event.data)));
     events.addEventListener("model", event => setModelStatus(JSON.parse(event.data)));
     events.addEventListener("transcript", event => addTranscript(JSON.parse(event.data)));
+    events.addEventListener("note", event => addNote(JSON.parse(event.data)));
     events.addEventListener("transcript-clear", clearTranscriptDisplay);
     events.addEventListener("session", event => handleSession(JSON.parse(event.data)));
     events.onerror = () => {
@@ -1503,6 +1734,15 @@ PAGE = """<!doctype html>
         updateControls();
       }
     });
+    noteToggle.addEventListener("click", () => setNoteComposerOpen(noteComposer.hidden));
+    noteInput.addEventListener("input", updateControls);
+    noteInput.addEventListener("keydown", event => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        submitNote();
+      }
+    });
+    noteSubmit.addEventListener("click", submitNote);
     sessionName.addEventListener("input", queueRename);
     sessionName.addEventListener("blur", () => {
       clearTimeout(renameTimer);
@@ -1523,6 +1763,7 @@ PAGE = """<!doctype html>
       setControlsCompact(false, false);
     }
     secureNotice.hidden = window.isSecureContext;
+    window.setInterval(updateNoteTimeline, 1000);
     updateTranscriptCount();
     updateControls();
   </script>
@@ -1536,6 +1777,7 @@ class EventHub:
         self._lock = threading.Lock()
         self._subscribers: set[queue.Queue[dict[str, Any]]] = set()
         self._transcripts: list[dict[str, Any]] = []
+        self._notes: list[dict[str, Any]] = []
         self._session: dict[str, Any] | None = None
         self._status: dict[str, Any] = {
             "type": "status",
@@ -1557,6 +1799,7 @@ class EventHub:
             if self._session is not None:
                 initial.append(self._session.copy())
             initial.extend(item.copy() for item in self._transcripts)
+            initial.extend(item.copy() for item in self._notes)
         return subscriber, initial
 
     def unsubscribe(self, subscriber: queue.Queue[dict[str, Any]]) -> None:
@@ -1601,12 +1844,26 @@ class EventHub:
         for subscriber in subscribers:
             subscriber.put(payload)
 
+    def publish_note(self, event: NoteEvent) -> None:
+        payload = {
+            "type": "note",
+            "timestamp": format_timestamp(event.timestamp_seconds),
+            "timestamp_seconds": round(event.timestamp_seconds, 3),
+            "text": event.text,
+        }
+        with self._lock:
+            self._notes.append(payload)
+            subscribers = tuple(self._subscribers)
+        for subscriber in subscribers:
+            subscriber.put(payload)
+
     def publish_session(self, payload: dict[str, Any]) -> None:
         event = {"type": "session", **payload}
         with self._lock:
             previous_id = self._session.get("id") if self._session is not None else None
             if event.get("state") == "recording" and event.get("id") != previous_id:
                 self._transcripts = []
+                self._notes = []
             self._session = event
             subscribers = tuple(self._subscribers)
         for subscriber in subscribers:
@@ -1618,7 +1875,7 @@ class EventHub:
                 self._session.get("state") if self._session is not None else None
             )
             needs_confirmation = (
-                bool(self._transcripts)
+                bool(self._transcripts or self._notes)
                 and session_state not in {None, "saved"}
             )
             if needs_confirmation and not confirmed:
@@ -1627,6 +1884,7 @@ class EventHub:
                     "錄音仍會繼續，稍後保存的檔案不受影響。確定要清除嗎？"
                 )
             self._transcripts = []
+            self._notes = []
             event = {"type": "transcript-clear"}
             subscribers = tuple(self._subscribers)
         for subscriber in subscribers:
@@ -1829,6 +2087,51 @@ def make_handler(
 
             parts = path.strip("/").split("/")
             if (
+                audio_receiver is not None
+                and len(parts) == 3
+                and parts[0] == "sessions"
+                and parts[2] == "notes"
+            ):
+                if not self._origin_matches_host():
+                    self.send_error(HTTPStatus.FORBIDDEN, "Origin does not match Host")
+                    return
+                try:
+                    body = self._read_json_body(max_content_length=256 * 1024)
+                    text = body.get("text")
+                    if not isinstance(text, str):
+                        raise TypeError("筆記內容必須是文字")
+                    note = audio_receiver.add_note(parts[1], text)
+                except KeyError:
+                    self._send_json(
+                        HTTPStatus.NOT_FOUND,
+                        {"ok": False, "message": "找不到逐字稿 session"},
+                    )
+                    return
+                except RuntimeError as exc:
+                    self._send_json(
+                        HTTPStatus.CONFLICT,
+                        {"ok": False, "message": str(exc)},
+                    )
+                    return
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    self._send_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {"ok": False, "message": str(exc)},
+                    )
+                    return
+                self._send_json(
+                    HTTPStatus.CREATED,
+                    {
+                        "ok": True,
+                        "note": {
+                            "timestamp": format_timestamp(note.timestamp_seconds),
+                            "timestamp_seconds": round(note.timestamp_seconds, 3),
+                            "text": note.text,
+                        },
+                    },
+                )
+                return
+            if (
                 audio_receiver is None
                 or len(parts) != 3
                 or parts[0] != "sessions"
@@ -1867,14 +2170,19 @@ def make_handler(
             except BaseException as exc:
                 print(f"模型載入失敗：{exc}", file=sys.stderr, flush=True)
 
-        def _read_json_body(self, *, allow_empty: bool = False) -> dict[str, Any]:
+        def _read_json_body(
+            self,
+            *,
+            allow_empty: bool = False,
+            max_content_length: int = 4096,
+        ) -> dict[str, Any]:
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
             except ValueError as exc:
                 raise ValueError("Invalid Content-Length") from exc
             if content_length == 0 and allow_empty:
                 return {}
-            if content_length <= 0 or content_length > 4096:
+            if content_length <= 0 or content_length > max_content_length:
                 raise ValueError("Invalid request body")
             body = json.loads(self.rfile.read(content_length))
             if not isinstance(body, dict):
