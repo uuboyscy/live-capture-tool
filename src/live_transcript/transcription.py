@@ -393,6 +393,9 @@ class WhisperEngine:
             verbose=None,
             condition_on_previous_text=False,
             no_speech_threshold=0.7,
+            # Bound fallback decoding for noisy audio in the live queue. The
+            # default six attempts can turn a short fragment into a long backlog.
+            temperature=(0.0, 0.2),
         )
         text = re.sub(r"\s+", " ", str(result.get("text", ""))).strip()
         if not text:
@@ -423,9 +426,15 @@ class TranscriptionWorker:
             raise RuntimeError("逐字稿工作已停止") from self._error
         self._queue.put(segment)
 
-    def stop(self) -> None:
+    def stop(self, on_progress: Callable[[int], None] | None = None) -> None:
         self._queue.put(None)
-        self._thread.join()
+        while self._thread.is_alive():
+            if on_progress is not None:
+                # unfinished_tasks includes the active item and stop sentinel.
+                with self._queue.mutex:
+                    pending = max(0, self._queue.unfinished_tasks - 1)
+                on_progress(pending)
+            self._thread.join(timeout=1.0)
         self._writer.close()
         if self._error is not None:
             raise RuntimeError("逐字稿工作執行失敗") from self._error
@@ -439,13 +448,16 @@ class TranscriptionWorker:
                 except queue.Empty:
                     self._deduplicator.flush_ready()
                     continue
-                if item is None:
-                    stopping = True
-                    continue
-                event = self._engine.transcribe(item)
-                if event is not None:
-                    self._deduplicator.add(event)
-                self._deduplicator.flush_ready()
+                try:
+                    if item is None:
+                        stopping = True
+                        continue
+                    event = self._engine.transcribe(item)
+                    if event is not None:
+                        self._deduplicator.add(event)
+                    self._deduplicator.flush_ready()
+                finally:
+                    self._queue.task_done()
             self._deduplicator.flush_ready(force=True)
         except BaseException as exc:
             self._error = exc

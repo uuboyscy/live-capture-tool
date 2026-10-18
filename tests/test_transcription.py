@@ -4,12 +4,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from live_transcript.audio import AudioSource
+from live_transcript.audio import AudioSegment, AudioSource
 from live_transcript.transcription import (
     EchoDeduplicator,
     NoteEvent,
     TranscriptEvent,
     TranscriptWriter,
+    TranscriptionWorker,
     WhisperEngine,
     events_are_duplicates,
     format_timestamp,
@@ -17,6 +18,46 @@ from live_transcript.transcription import (
 
 
 class TranscriptTests(unittest.TestCase):
+    def test_stop_reports_active_and_queued_audio_and_saves_every_segment(self) -> None:
+        entered = threading.Event()
+        release = threading.Event()
+        progress_seen = threading.Event()
+        pending = []
+
+        class SlowEngine:
+            def transcribe(self, segment):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("test did not release decoder")
+                return TranscriptEvent(segment.source, segment.start_seconds,
+                                       segment.end_seconds, "保留音訊")
+
+        with tempfile.TemporaryDirectory() as directory:
+            writer = TranscriptWriter(Path(directory))
+            worker = TranscriptionWorker(SlowEngine(), writer)
+            worker.start()
+            for start in (0, 1):
+                worker.submit(AudioSegment(AudioSource.SYSTEM, start, start + 1, b""))
+
+            def report(count):
+                pending.append(count)
+                progress_seen.set()
+
+            stopper = threading.Thread(target=lambda: worker.stop(on_progress=report))
+            try:
+                self.assertTrue(entered.wait(2))
+                stopper.start()
+                self.assertTrue(progress_seen.wait(2))
+                self.assertEqual(pending[0], 2)
+            finally:
+                release.set()
+                if stopper.ident is not None:
+                    stopper.join(5)
+                else:
+                    worker.stop()
+            self.assertFalse(stopper.is_alive())
+            self.assertEqual(len(writer.jsonl_path.read_text().splitlines()), 2)
+
     def test_timestamp(self) -> None:
         self.assertEqual(format_timestamp(3_661.9), "01:01:01")
 

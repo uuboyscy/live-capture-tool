@@ -188,7 +188,12 @@ class RemoteAudioReceiver:
                 segment = segmenter.flush()
                 if segment is not None:
                     worker.submit(segment)
-            worker.stop()
+            started = time.monotonic()
+            worker.stop(on_progress=lambda pending: self._set_status(
+                "processing",
+                f"正在辨識剩餘 {pending} 個音訊片段（已等待 {int(time.monotonic() - started)} 秒）；完成後自動保存"
+                if pending else "辨識已完成，正在保存逐字稿",
+            ))
         except BaseException:
             with self._lock:
                 record.state = "error"

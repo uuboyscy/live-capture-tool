@@ -1666,10 +1666,12 @@ PAGE = """<!doctype html>
       audioNodes = [];
       captureStreams.forEach(stream => stream.getTracks().forEach(track => track.stop()));
       captureStreams = [];
+      // Notify the server before awaiting browser audio teardown, which can
+      // stall when a background tab or audio device is suspended.
+      if (closeSocket && socket && socket.readyState < WebSocket.CLOSING) socket.close();
       if (audioContext) await audioContext.close();
       audioContext = null;
       silentOutput = null;
-      if (closeSocket && socket && socket.readyState < WebSocket.CLOSING) socket.close();
       updateControls();
     }
 
@@ -1721,8 +1723,9 @@ PAGE = """<!doctype html>
       setProcessingState(true);
       setStatus({ state: "processing", message: "正在辨識剩餘音訊並保存逐字稿" });
       nameState.textContent = "完成辨識中…";
+      const stopping = stopCapture();
       await renameSession();
-      await stopCapture();
+      await stopping;
     });
     clearTranscriptButton.addEventListener("click", async () => {
       clearTranscriptButton.disabled = true;
